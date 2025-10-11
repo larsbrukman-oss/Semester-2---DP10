@@ -28,4 +28,4 @@ if __name__ == "__main__":
 
 #Regel 26-27 = start de app : zorgt dat main() alleen wordt uitgevoerd als je main direct start
 
-print("Dit is een nog een test voor git")
+print("dit is een nieuwe test om te kijken of git werkt")
