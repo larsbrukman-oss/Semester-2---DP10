@@ -27,12 +27,15 @@ developer (or you in a few days) can understand what each part does.
 """
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QBrush, QColor
 import random
 
 
 class Scherm2(QWidget):
+    # Signal emitted whenever the train position or info is refreshed.
+    # Emits (train_info: dict, position: tuple(x,y))
+    train_updated = pyqtSignal(dict, tuple)
     """Main screen for following the train.
 
     This class builds the layout: a central map area and some buttons below it.
@@ -73,6 +76,19 @@ class Scherm2(QWidget):
         ]
         # Tell the map widget to draw these attractions.
         self.map_widget.set_attractions(self.attractions)
+
+        # Example platforms (perrons). We'll draw them as point markers
+        # (like attractions) to keep the map consistent and less cluttered.
+        # Each platform entry is (x, y, label) with normalized coords.
+        self.platforms = [
+            (0.12, 0.86, "Perron 1"),
+            (0.88, 0.86, "Perron 2"),
+        ]
+        # Tell the map widget to draw platforms as point markers.
+        self.map_widget.set_platforms(self.platforms)
+        # Track reservations per station (platform). Start at zero.
+        # Keys are the platform labels so we can show counts per destination.
+        self.reservations = {label: 0 for (_, _, label) in self.platforms}
 
         # Small spacing between map and buttons — keeps the UI airy.
         layout.addSpacing(12)
@@ -138,6 +154,18 @@ class Scherm2(QWidget):
         self.current_pos = (0.5, 0.5)
         self.map_widget.set_dot_normalized(*self.current_pos)
 
+        # Small initial train info; seats and arrival time are simulated.
+        self.train_info = {"seats_available": 20, "total_seats": 20, "arrival_minutes": 0}
+        # Ensure the map widget knows the initial train info as well.
+        try:
+            self.map_widget.set_train_info(self.train_info)
+        except Exception:
+            pass
+
+    def get_train_info(self):
+        """Return the current simulated train info dict."""
+        return getattr(self, 'train_info', {"seats_available": 0, "total_seats": 20, "arrival_minutes": 0})
+
     def resizeEvent(self, event):
         """Handle window resizes.
 
@@ -179,6 +207,43 @@ class Scherm2(QWidget):
         self.current_pos = (x, y)
         # Tell the map widget to repaint with the new dot position.
         self.map_widget.set_dot_normalized(x, y)
+        # Update simulated train info when we refresh location.
+        # For demo purposes we randomize seats and arrival time.
+        seats = random.randint(0, 20)
+        minutes = random.randint(1, 12)
+        # choose a random destination platform and a random reservations count
+        dest_label = None
+        reservations_for_dest = 0
+        try:
+            if hasattr(self, 'platforms') and self.platforms:
+                dest_label = random.choice(self.platforms)[2]
+                # propose some reservations for that destination
+                proposed = random.randint(0, 15)
+                # enforce that onboard (total - seats_available) + proposed <= total
+                onboard = 20 - seats
+                max_allowed_reservations = max(0, 20 - onboard)
+                reservations_for_dest = min(proposed, max_allowed_reservations)
+                # update stored reservations per station
+                self.reservations[dest_label] = reservations_for_dest
+        except Exception:
+            dest_label = None
+
+        self.train_info = {
+            "seats_available": seats,
+            "total_seats": 20,
+            "arrival_minutes": minutes,
+            "destination": dest_label,
+            "reservations_for_destination": reservations_for_dest,
+        }
+        try:
+            self.map_widget.set_train_info(self.train_info)
+        except Exception:
+            pass
+        # Notify listeners (e.g., scherm4) that the train was updated.
+        try:
+            self.train_updated.emit(self.train_info, self.current_pos)
+        except Exception:
+            pass
 
     def open_scherm4(self):
         """Navigate to screen 4 (zoomed view).
@@ -209,6 +274,10 @@ class Scherm2(QWidget):
 
 
 class MapWidget(QWidget):
+    # Signal emitted when the train dot is clicked. Sends the current train_info dict.
+    train_clicked = pyqtSignal(dict)
+    # Signal emitted when an attraction marker is clicked. Sends the attraction label.
+    attraction_clicked = pyqtSignal(str)
     """A tiny, self-contained drawing surface that simulates a map.
 
     Implementation notes (human tone):
@@ -231,6 +300,8 @@ class MapWidget(QWidget):
         self._dot = (0.5, 0.5)
         # Set a comfortable minimum size so the map looks good on small windows.
         self.setMinimumSize(220, 220)
+        # optional metadata about the train; used when the user clicks the train
+        self._train_info = {"seats_available": 20, "total_seats": 20, "arrival_minutes": 0}
 
     def set_dot_normalized(self, x, y):
         """Update the train position (normalized coords) and repaint.
@@ -248,6 +319,19 @@ class MapWidget(QWidget):
         Each attraction is a tuple: (x, y, label) with normalized x/y.
         """
         self._attractions = attractions
+        self.update()
+
+    def set_train_info(self, info: dict):
+        """Store arbitrary train info that will be emitted when the train is clicked."""
+        self._train_info = dict(info) if info is not None else {}
+        self.update()
+
+    def set_platforms(self, platforms):
+        """Provide a list of platforms (perrons) to draw.
+        Each platform is a tuple: (x, y, label) with normalized coords. Platforms
+        are drawn as point markers (like attractions) in this UI.
+        """
+        self._platforms = platforms
         self.update()
 
     def paintEvent(self, event):
@@ -285,9 +369,15 @@ class MapWidget(QWidget):
         painter.setPen(Qt.GlobalColor.black)
         painter.drawEllipse(dot_x - radius, dot_y - radius, radius * 2, radius * 2)
 
+        # record the last drawn dot area for hit-testing in mouse events
+        self._last_dot_rect = (dot_x - radius, dot_y - radius, radius * 2, radius * 2)
+
         # Draw attraction markers (if provided). Markers are small red dots
         # with plain text labels to the right. If you want richer labels
         # (background boxes, fonts), we can add that easily.
+        # Keep a list of last drawn attraction positions to support click
+        # hit-testing in mousePressEvent.
+        self._last_attraction_positions = []
         if hasattr(self, '_attractions') and self._attractions:
             marker_radius = max(6, int(min(w, h) * 0.03))
             painter.setBrush(QBrush(QColor(200, 30, 30)))
@@ -299,5 +389,59 @@ class MapWidget(QWidget):
                 painter.drawEllipse(mx - marker_radius, my - marker_radius, marker_radius * 2, marker_radius * 2)
                 # label — simple and readable
                 painter.drawText(mx + marker_radius + 4, my + marker_radius // 2, label)
+                # store for hit-testing: (center_x, center_y, radius, label)
+                self._last_attraction_positions.append((mx, my, marker_radius, label))
+
+        # Draw platforms (perrons) as blue point markers (similar to
+        # attractions) so they are visually consistent and compact.
+        if hasattr(self, '_platforms') and self._platforms:
+            platform_marker_radius = max(6, int(min(w, h) * 0.03))
+            painter.setBrush(QBrush(QColor(50, 120, 220)))
+            painter.setPen(Qt.GlobalColor.black)
+            for (px, py, plabel) in self._platforms:
+                mx = int(px * w)
+                my = int(py * h)
+                painter.drawEllipse(mx - platform_marker_radius, my - platform_marker_radius, platform_marker_radius * 2, platform_marker_radius * 2)
+                painter.drawText(mx + platform_marker_radius + 4, my + platform_marker_radius // 2, plabel)
+
+    def mousePressEvent(self, event):
+        """Detect clicks on the train dot and emit `train_clicked` with info.
+
+        This is a simple bounding-box hit test. For a more precise hit-test
+        we could compute distance from the dot center.
+        """
+        try:
+            x = event.position().x()
+            y = event.position().y()
+        except Exception:
+            # Fallback for older Qt versions
+            x = event.x()
+            y = event.y()
+
+        if hasattr(self, '_last_dot_rect'):
+            rx, ry, rw, rh = self._last_dot_rect
+            if rx <= x <= rx + rw and ry <= y <= ry + rh:
+                # Emit the stored train info when the train dot is clicked.
+                try:
+                    self.train_clicked.emit(getattr(self, '_train_info', {}))
+                except Exception:
+                    pass
+                return
+        # Check attractions (circular hit test)
+        try:
+            if hasattr(self, '_last_attraction_positions'):
+                for (cx, cy, r, label) in self._last_attraction_positions:
+                    dx = x - cx
+                    dy = y - cy
+                    if dx * dx + dy * dy <= r * r:
+                        try:
+                            self.attraction_clicked.emit(label)
+                        except Exception:
+                            pass
+                        return
+        except Exception:
+            pass
+        # not the train — pass to base class
+        super().mousePressEvent(event)
 
     
