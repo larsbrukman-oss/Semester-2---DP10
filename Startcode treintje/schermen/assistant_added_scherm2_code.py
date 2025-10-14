@@ -1,10 +1,22 @@
+# --- written by assistant ---
+# This file contains the code that was added to `scherm2.py` by the assistant.
+# Purpose: standalone copy so you can easily separate assistant-generated code
+# from the original project files. The code below is safe to read and copy.
+
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QBrush, QColor
 import random
 
-class Scherm2(QWidget):
-    def __init__(self, main_window):
+
+class Scherm2_Assistant(QWidget):
+    """Replica of the assistant-added UI for Scherm2.
+
+    Use this as a reference. It is not wired into the app automatically.
+    Copy the relevant parts into your `scherm2.py` if you want to replace the
+    existing screen.
+    """
+    def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
         layout = QVBoxLayout()
@@ -60,7 +72,11 @@ class Scherm2(QWidget):
         self.map_widget.set_dot_normalized(x, y)
 
     def open_scherm(self):
-        self.main_window.toon_pagina(self.main_window.scherm3)
+        if self.main_window:
+            try:
+                self.main_window.toon_pagina(self.main_window.scherm3)
+            except Exception:
+                pass
 
 
 class MapWidget(QWidget):
@@ -102,5 +118,5 @@ class MapWidget(QWidget):
         painter.setPen(Qt.GlobalColor.black)
         painter.drawEllipse(dot_x - radius, dot_y - radius, radius * 2, radius * 2)
 
-    def open_scherm(self):
-        self.main_window.toon_pagina(self.main_window.scherm3)
+
+# --- end of assistant code ---
