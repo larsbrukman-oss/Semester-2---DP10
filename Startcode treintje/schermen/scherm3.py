@@ -1,12 +1,18 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 
+# Klasse : Scherm3
+# Deze klasse wordt niet gebruikt voor het doeleinde van dit project
+# er is alleen een knop toegevoegd om terug te gaan naar scherm2 + de orginele knop naar scherm4
+
 class Scherm3(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         layout = QVBoxLayout()
 
-        # Top row: terug knop linksboven
+# Hier maken we de knop aan om terug te gaan naar scherm2
+# en we stylen deze knop zodat het overeenkomt met de stijl van de andere knoppen
+
         top_row = QHBoxLayout()
         self.btn_terug = QPushButton("Terug")
         self.btn_terug.setFixedSize(120, 40)
@@ -18,7 +24,6 @@ class Scherm3(QWidget):
 
         layout.addWidget(QLabel("Dit is scherm 3"))
 
-        # TODO: ervoor zorgen dat als je op een product klikt je naar het juiste product gaat
         btn_naar_scherm_4 = QPushButton("Naar scherm 4")
         btn_naar_scherm_4.clicked.connect(self.open_scherm)
         layout.addWidget(btn_naar_scherm_4)
