@@ -54,6 +54,10 @@ class Scherm4(QWidget):
         self.setLayout(layout)
         # mapping from attraction label -> persistent wait time in minutes
         self._attraction_waits = {}
+        # mapping from platform label -> persistent extra time (minutes)
+        self._platform_extra_times = {}
+        # mapping from platform label -> persistent arrival minutes shown after the platform
+        self._platform_arrival_minutes = {}
 
     def showEvent(self, event):
         """When shown, sync data from scherm2 so the large map matches state."""
@@ -124,29 +128,79 @@ class Scherm4(QWidget):
             pass
 
     def _on_train_clicked(self, info: dict):
-        """Show a small dialog with train information (seats and arrival)."""
+        """Toont een compacte Nederlandse samenvatting wanneer de treindot wordt aangeklikt.
+
+        We genereren voor de demo een willekeurig aantal beschikbare plekken
+        (0..20). De aankomst wordt gekoppeld aan een willekeurig perron uit de
+        lijst van `scherm2.platforms` (als die beschikbaar is), en we tonen
+        hoeveel plekken er beschikbaar zijn voor reservering op dat perron
+        op basis van `scherm2.reservations` als die aanwezig is.
+        """
         try:
-            seats_available = int(info.get('seats_available', 0))
-            total = int(info.get('total_seats', 20))
-            minutes = info.get('arrival_minutes', None)
-            dest = info.get('destination', None)
-            reservations = int(info.get('reservations_for_destination', 0))
+            # Seats available is randomized here for demo purposes.
+            seats_available = random.randint(0, 20)
+            total = 20
 
-            text = f"Seats available: {seats_available} / {total}\n"
-            if minutes is not None:
-                text += f"Arrival: {minutes} minutes\n"
-            else:
-                text += "Arrival: unknown\n"
-            if dest:
-                text += f"Destination: {dest}\n"
-                text += f"Reservations for destination: {reservations}\n"
+            # Choose a random platform (destination) if scherm2 exposes platforms
+            platform_label = None
+            platform_display = "-"
+            reservations_for_platform = None
+            try:
+                s2 = getattr(self.main_window, 'scherm2', None)
+                if s2 and hasattr(s2, 'platforms') and s2.platforms:
+                    # pick a random platform tuple (x,y,label)
+                    p = random.choice(s2.platforms)
+                    platform_label = p[2]
+                    platform_display = platform_label
+                    # If reservations mapping exists, use it to compute available
+                    # spots for reservation (total seats - onboard - existing reservations)
+                    try:
+                        reservations_map = getattr(s2, 'reservations', {})
+                        existing = int(reservations_map.get(platform_label, 0))
+                        onboard = total - seats_available
+                        # maximum that can be reserved safely
+                        max_allowed = max(0, total - onboard)
+                        # available spots for reservation is what's left from max_allowed
+                        reservations_for_platform = max(0, max_allowed - existing)
+                    except Exception:
+                        reservations_for_platform = None
+                else:
+                    # No platforms known; pick a synthetic label
+                    platform_display = f"Perron {random.randint(1,4)}"
+            except Exception:
+                platform_display = f"Perron {random.randint(1,4)}"
 
-            # Sanity statement: reserved + onboard must not exceed total seats.
-            onboard = total - seats_available
-            if onboard + reservations > total:
-                text += "WARNING: reservations + onboard exceed train capacity!\n"
+            # Build the Dutch text lines requested by the user.
+            text = f"plekken beschikbaar : {seats_available} / {total}\n"
+            # Ensure we have a persistent arrival minute value per platform
+            key_for_arrival = platform_label if platform_label else platform_display
+            if key_for_arrival not in self._platform_arrival_minutes:
+                self._platform_arrival_minutes[key_for_arrival] = random.randint(1, 12)
+            arrival_min = self._platform_arrival_minutes[key_for_arrival]
+            text += f"aankomst tot {platform_display}: {arrival_min} minuten\n"
+            # If the chosen platform is Perron 2, show an extra persistent time
+            show_extra = False
+            try:
+                if platform_label and ('2' in platform_label or platform_label.lower().strip() == 'perron 2'):
+                    show_extra = True
+                elif isinstance(platform_display, str) and '2' in platform_display:
+                    show_extra = True
+            except Exception:
+                show_extra = False
+
+            if show_extra:
+                # ensure a persistent extra time for this platform label (or display)
+                key = platform_label if platform_label else platform_display
+                if key not in self._platform_extra_times:
+                    self._platform_extra_times[key] = random.randint(1, 12)
+                extra = self._platform_extra_times[key]
+                text += f"extra verwerkingstijd: {extra} minuten\n"
+            if reservations_for_platform is None:
+                # If we couldn't compute real reservation capacity, show a demo value
+                demo_reserve_spots = random.randint(0, max(0, total - (total - seats_available)))
+                text += f"beschikbare plekken voor reservering: {demo_reserve_spots}\n"
             else:
-                text += "Reservation status: OK\n"
+                text += f"beschikbare plekken voor reservering: {reservations_for_platform}\n"
 
             dlg = QMessageBox(self)
             dlg.setWindowTitle('Trein informatie')
