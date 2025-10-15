@@ -52,6 +52,8 @@ class Scherm4(QWidget):
         layout.addLayout(btn_row)
 
         self.setLayout(layout)
+        # mapping from attraction label -> persistent wait time in minutes
+        self._attraction_waits = {}
 
     def showEvent(self, event):
         """When shown, sync data from scherm2 so the large map matches state."""
@@ -64,6 +66,12 @@ class Scherm4(QWidget):
                 # copy attractions and platforms if present
                 if hasattr(s2, 'attractions'):
                     self.map_widget.set_attractions(s2.attractions)
+                    # Ensure each attraction has a single persistent wait time.
+                    # If we already generated a wait for a label, keep it.
+                    for (_ax, _ay, label) in s2.attractions:
+                        if label not in self._attraction_waits:
+                            # random wait between 3 and 25 minutes
+                            self._attraction_waits[label] = random.randint(3, 25)
                 if hasattr(s2, 'platforms'):
                     self.map_widget.set_platforms(s2.platforms)
                 # copy train info if available
@@ -151,13 +159,15 @@ class Scherm4(QWidget):
     def _on_attraction_clicked(self, label: str):
         """Show a small dialog with simulated wait times for the attraction."""
         try:
-            waits = [random.randint(5, 45) for _ in range(3)]
-            text = f"Wachttijden voor {label}:\n"
-            for i, w in enumerate(waits, start=1):
-                text += f"  Rij {i}: {w} min\n"
+            # Use the persistent wait time for this attraction label. If
+            # for some reason it doesn't exist, generate and store it.
+            if label not in self._attraction_waits:
+                self._attraction_waits[label] = random.randint(3, 25)
+            wait = self._attraction_waits[label]
+            text = f"Wachttijd = {wait} minuut"
 
             dlg = QMessageBox(self)
-            dlg.setWindowTitle(f"Wachttijden - {label}")
+            dlg.setWindowTitle(f"Wachttijd - {label}")
             dlg.setText(text)
             dlg.setIcon(QMessageBox.Icon.Information)
             dlg.exec()
