@@ -1,29 +1,28 @@
 """
 scherm2.py
 
-This file implements the 'Volg de trein' screen (Scherm2).
+Dit bestand implementeert het 'Volg de trein' scherm (Scherm2).
 
-Short human-friendly explanation (written in natural language):
-- The main widget shows a simple square 'map' area (drawn manually) and
-    a few controls underneath. The map is not a real map service — it's a
-    lightweight placeholder that paints a background, grid lines, attraction
-    markers and a single black dot that represents the train's estimated
-    location.
+Korte, mensvriendelijke uitleg:
+- De hoofdwidget toont een eenvoudige vierkante 'kaart' (handmatig getekend)
+    met een paar knoppen eronder. Dit is geen echte kaartdienst maar een
+    lichte placeholder: achtergrond, rasterlijnen, attractiemarkeringen en
+    een zwarte stip die de geschatte positie van de trein weergeeft.
 
-How to read this file quickly:
-- The `Scherm2` class builds the UI layout and wires the buttons.
-- The `MapWidget` class does the painting: background, grid, attractions,
-    and the train dot. Coordinates for attractions and the train are
-    normalized (0.0..1.0) relative to the widget size.
+Hoe dit bestand snel te lezen:
+- De klasse `Scherm2` bouwt de UI-layout en koppelt de knoppen.
+- De klasse `MapWidget` doet het tekenen: achtergrond, raster, attracties
+    en de treindot. Coördinaten voor attracties en de trein zijn genormaliseerd
+    (0.0..1.0) ten opzichte van de widgetgrootte.
 
-If you want to change behavior:
-- Update `self.attractions` inside `Scherm2.__init__` to add/remove attractions.
-- Change the random movement in `ververs_locatie` to follow a recorded path.
-- Replace the placeholder drawing in `MapWidget.paintEvent` with an image
-    or a real map widget if you want higher fidelity.
+Als je gedrag wilt aanpassen:
+- Pas `self.attractions` in `Scherm2.__init__` aan om attracties toe te voegen/verwijderen.
+- Vervang de random beweging in `ververs_locatie` door een opgenomen route.
+- Vervang de placeholder-tekening in `MapWidget.paintEvent` door een afbeelding
+    of een echte kaartwidget voor hogere nauwkeurigheid.
 
-The comments in this file are written in plain language so another
-developer (or you in a few days) can understand what each part does.
+De opmerkingen in dit bestand zijn in begrijpelijk Nederlands geschreven zodat
+een andere ontwikkelaar (of jijzelf later) snel kan begrijpen wat er gebeurt.
 """
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout
@@ -36,11 +35,10 @@ class Scherm2(QWidget):
     # Signal emitted whenever the train position or info is refreshed.
     # Emits (train_info: dict, position: tuple(x,y))
     train_updated = pyqtSignal(dict, tuple)
-    """Main screen for following the train.
+    """Hoofdscherm om de trein te volgen.
 
-    This class builds the layout: a central map area and some buttons below it.
-    I wrote the comments so they read like a colleague explaining the code:
-    short, practical and actionable.
+    Deze klasse bouwt de layout: een centraal kaartgebied met knoppen eronder.
+    De opmerkingen zijn beknopt en praktisch zodat de code makkelijk te volgen is.
     """
 
     def __init__(self, main_window):
@@ -49,14 +47,29 @@ class Scherm2(QWidget):
         self.main_window = main_window
 
         # Vertical layout: map at the top (centered), control buttons below.
+    # Verticale layout: kaart bovenin (gecentreerd), bedieningsknoppen eronder.
         layout = QVBoxLayout()
 
+        # Top row: left-aligned back button that returns to the start screen.
+    # Bovenste rij: terugknop linksboven die naar het startscherm teruggaat.
+        top_row = QHBoxLayout()
+        self.btn_terug_top = QPushButton("Terug")
+        self.btn_terug_top.setFixedSize(120, 40)
+        self.btn_terug_top.setStyleSheet("QPushButton{background-color: #28a745; color: white; border-radius: 20px; font-weight: 600;}")
+        # Wire to startscherm
+        self.btn_terug_top.clicked.connect(lambda: self.main_window.toon_pagina(self.main_window.startscherm))
+        top_row.addWidget(self.btn_terug_top)
+        top_row.addStretch(1)
+        layout.addLayout(top_row)
+
         # Give the map a little breathing room from the top of the window.
+    # Geef de kaart wat ruimte vanaf de bovenkant van het venster.
         layout.addStretch(1)
 
         # Create a horizontal container for the map to keep it centered.
-        # The map itself is a custom widget (MapWidget) that handles its own
-        # painting. We add stretch on both sides so the map stays centered.
+    # Maak een horizontale container zodat de kaart gecentreerd blijft.
+    # De kaart is een custom widget (`MapWidget`) die zelf tekent. We
+    # plaatsen stretches aan beide zijden om centering af te dwingen.
         self.map_container = QHBoxLayout()
         self.map_container.addStretch(1)
         self.map_widget = MapWidget()
@@ -65,9 +78,10 @@ class Scherm2(QWidget):
         layout.addLayout(self.map_container)
 
         # ------------------------------------------------------------------
-        # Attractions: these are example points on the map. Coordinates are
-        # normalized between 0.0 and 1.0 so they work regardless of widget size.
-        # To change the attractions, edit this list: (x, y, label).
+    # ------------------------------------------------------------------
+    # Attracties: voorbeeldpunten op de kaart. Coördinaten zijn genormaliseerd
+    # tussen 0.0 en 1.0 zodat ze werken ongeacht widgetgrootte. Pas deze lijst
+    # aan om attracties toe te voegen of te verwijderen: (x, y, label).
         # ------------------------------------------------------------------
         self.attractions = [
             (0.2, 0.2, "Rollercoaster"),
@@ -75,29 +89,32 @@ class Scherm2(QWidget):
             (0.5, 0.7, "Haunted House"),
         ]
         # Tell the map widget to draw these attractions.
+    # Geef de kaartwidget door welke attracties getekend moeten worden.
         self.map_widget.set_attractions(self.attractions)
 
         # Example platforms (perrons). We'll draw them as point markers
-        # (like attractions) to keep the map consistent and less cluttered.
-        # Each platform entry is (x, y, label) with normalized coords.
+    # Voorbeeldperrons. We tekenen deze als puntmarkeringen (zoals attracties)
+    # zodat de kaart overzichtelijk blijft. Iedere entry is (x, y, label).
         self.platforms = [
             (0.12, 0.86, "Perron 1"),
             (0.88, 0.86, "Perron 2"),
         ]
         # Tell the map widget to draw platforms as point markers.
         self.map_widget.set_platforms(self.platforms)
-        # Track reservations per station (platform). Start at zero.
-        # Keys are the platform labels so we can show counts per destination.
+    # Geef de kaartwidget de perrons door en houd reserveringen per perron bij.
+    # Reserveringen starten op nul; de keys zijn perronlabels.
         self.reservations = {label: 0 for (_, _, label) in self.platforms}
 
         # Small spacing between map and buttons — keeps the UI airy.
+    # Kleine ruimte tussen kaart en knoppen — houdt de UI luchtig.
         layout.addSpacing(12)
 
         # ------------------------------------------------------------------
-        # Middle row: two important actions sit side-by-side under the map:
-        # - 'Volg de trein' updates the train position (right now it randomizes)
-        # - 'Vergroot' goes to the zoom screen (scherm4)
-        # I keep both buttons the same visual size so the UI feels balanced.
+    # ------------------------------------------------------------------
+    # Middenrij: twee belangrijke acties naast elkaar onder de kaart:
+    # - 'Volg de trein' ververst de treinkpositie (nu random)
+    # - 'Vergroot' opent het vergrote kaartscherm (scherm4)
+    # Beide knoppen hebben gelijke afmetingen voor visuele balans.
         # ------------------------------------------------------------------
         middle_row = QHBoxLayout()
         middle_row.addStretch(1)
@@ -105,6 +122,7 @@ class Scherm2(QWidget):
         btn_ververs = QPushButton("Volg de trein")
         btn_ververs.setFixedSize(200, 50)
         # When the user clicks this, we refresh the train location.
+    # Wanneer de gebruiker klikt, verversen we de treinlocatie.
         btn_ververs.clicked.connect(self.ververs_locatie)
         btn_ververs.setStyleSheet(
             "QPushButton{background-color: #28a745; color: white; border-radius: 25px; font-weight: 600;}"
@@ -116,6 +134,7 @@ class Scherm2(QWidget):
         self.vergroot_btn = QPushButton("Vergroot")
         self.vergroot_btn.setFixedSize(200, 50)
         # This currently navigates to scherm4. Later we could make it zoom in-place.
+    # Op dit moment navigeert dit naar scherm4. Later kan dit in-place zoomen.
         self.vergroot_btn.clicked.connect(self.open_scherm4)
         self.vergroot_btn.setStyleSheet("QPushButton{background-color: #0069d9; color: white; border-radius: 25px;}" )
         middle_row.addWidget(self.vergroot_btn)
@@ -124,12 +143,14 @@ class Scherm2(QWidget):
         layout.addLayout(middle_row)
 
         # A bit of flexible space so the map stays visually dominant.
+    # Een flexibele ruimte zodat de kaart visueel dominant blijft.
         layout.addStretch(1)
 
         # ------------------------------------------------------------------
-        # Lower row: a centered 'Reserveer' button. This is a placeholder
-        # for a reservation flow — feel free to wire it to a real page.
-        # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Onderste rij: een gecentreerde 'Reserveer' knop. Placeholder voor de
+    # reserveringsflow — koppel gerust aan een echte pagina.
+    # ------------------------------------------------------------------
         lower_row = QHBoxLayout()
         lower_row.addStretch(1)
         btn_reserveer = QPushButton("Reserveer")
@@ -144,13 +165,15 @@ class Scherm2(QWidget):
         layout.addLayout(lower_row)
 
         # Apply the composed layout to the widget.
+    # Stel de samengestelde layout in op de widget.
         self.setLayout(layout)
 
         # ------------------------------------------------------------------
-        # Initial state: place the train roughly in the middle of the map.
-        # Coordinates are normalized (0..1) so the widget will draw the dot
-        # at the correct pixel location in `MapWidget.paintEvent`.
-        # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Initiële staat: plaats de trein ongeveer in het midden van de kaart.
+    # Coördinaten zijn genormaliseerd (0..1) zodat de dot correct wordt
+    # getekend in `MapWidget.paintEvent`.
+    # ------------------------------------------------------------------
         self.current_pos = (0.5, 0.5)
         self.map_widget.set_dot_normalized(*self.current_pos)
 
@@ -163,14 +186,14 @@ class Scherm2(QWidget):
             pass
 
     def get_train_info(self):
-        """Return the current simulated train info dict."""
+        """Geef de huidige gesimuleerde treininfo als dict terug."""
         return getattr(self, 'train_info', {"seats_available": 0, "total_seats": 20, "arrival_minutes": 0})
 
     def resizeEvent(self, event):
-        """Handle window resizes.
+        """Afhandelen van venstergrootte-wijzigingen.
 
-        We make the map a square whose side is a portion of the main window
-        height so the map scales sensibly when the user resizes the window.
+        We maken de kaart vierkant met een zijde die een deel van de
+        hoofdvensterhoogte is, zodat de kaart voorspelbaar schaalt.
         """
         try:
             # make the map approximately 55% of the main window height
@@ -185,45 +208,44 @@ class Scherm2(QWidget):
         super().resizeEvent(event)
 
     def position_vergroot_button(self):
-        """Legacy helper (kept for reference).
+        """Legacy helper (blijft ter referentie).
 
-        Previous layouts positioned the 'Vergroot' button as a child of the map
-        and required manual centering. In the current layout the button sits
-        under the map, so this method is kept for backward compatibility only.
+        Eerdere layouts plaatsten de 'Vergroot' knop als kind van de kaart
+        en vroegen handmatige centrering. In de huidige layout staat de knop
+        onder de kaart; deze functie is ter documentatie bewaard.
         """
-        # No work necessary in the current layout; function left intentionally
-        # as documentation for earlier behavior.
+        # Geen actie nodig in de huidige layout; functie is documentatief.
         return
 
     def ververs_locatie(self):
-        """Refresh the train's estimated location.
+        """Ververs de geschatte positie van de trein.
 
-        Right now this simply picks a random location on the map. In a real
-        application you'd replace this with the latest estimate from your
-        backend or a simulated route.
+        Op dit moment kiezen we een willekeurige locatie. In een echte
+        applicatie vervang je dit door de laatste schatting van de backend
+        of een gesimuleerde route.
         """
         x = random.random()
         y = random.random()
         self.current_pos = (x, y)
-        # Tell the map widget to repaint with the new dot position.
+        # Vraag de kaartwidget de nieuwe treindot te tekenen.
         self.map_widget.set_dot_normalized(x, y)
-        # Update simulated train info when we refresh location.
-        # For demo purposes we randomize seats and arrival time.
+        # Werk gesimuleerde treininfo bij bij verversen. Voor demo randomiseren
+        # we het aantal beschikbare zitplaatsen en aankomsttijd.
         seats = random.randint(0, 20)
         minutes = random.randint(1, 12)
-        # choose a random destination platform and a random reservations count
+        # kies een willekeurig bestemmingsperron en een aantal reserveringen
         dest_label = None
         reservations_for_dest = 0
         try:
             if hasattr(self, 'platforms') and self.platforms:
                 dest_label = random.choice(self.platforms)[2]
-                # propose some reservations for that destination
+                # stel een voorstel voor reserveringen vast voor die bestemming
                 proposed = random.randint(0, 15)
-                # enforce that onboard (total - seats_available) + proposed <= total
+                # zorg dat (aan boord) + voorgestelde reserveringen <= totale plaatsen
                 onboard = 20 - seats
                 max_allowed_reservations = max(0, 20 - onboard)
                 reservations_for_dest = min(proposed, max_allowed_reservations)
-                # update stored reservations per station
+                # werk de opgeslagen reserveringen per station bij
                 self.reservations[dest_label] = reservations_for_dest
         except Exception:
             dest_label = None
@@ -239,19 +261,16 @@ class Scherm2(QWidget):
             self.map_widget.set_train_info(self.train_info)
         except Exception:
             pass
-        # Notify listeners (e.g., scherm4) that the train was updated.
+        # Informeer luisteraars (bijv. scherm4) dat de trein is bijgewerkt.
         try:
             self.train_updated.emit(self.train_info, self.current_pos)
         except Exception:
             pass
 
     def open_scherm4(self):
-        """Navigate to screen 4 (zoomed view).
-
-        The button labeled 'Vergroot' triggers this. Currently it just asks
-        the main window to show `scherm4` (that screen exists in the app
-        stack). If you want in-place zoom instead, we can implement that.
-        """
+        """Navigeer naar scherm 4 (vergroot weergave)."""
+        # De 'Vergroot' knop roept dit aan. Momenteel vraagt dit het hoofdvenster
+        # om `scherm4` te tonen. Voor in-place zoomen kan dit later worden aangepast.
         if hasattr(self, 'main_window') and self.main_window:
             try:
                 self.main_window.toon_pagina(self.main_window.scherm4)
@@ -260,12 +279,8 @@ class Scherm2(QWidget):
                 pass
 
     def open_scherm(self):
-        """Navigate to screen 3 (placeholder for reservation flow).
-
-        This method is a thin wrapper that asks the main window to switch
-        the visible page in the stacked widget. It's intentionally simple;
-        error handling is kept minimal for clarity.
-        """
+        """Navigeer naar scherm 3 (placeholder voor reserveringsflow)."""
+        # Deze methode vraagt het hoofdvenster de zichtbare pagina in de stack te wisselen.
         if hasattr(self, 'main_window') and self.main_window:
             try:
                 self.main_window.toon_pagina(self.main_window.scherm3)
